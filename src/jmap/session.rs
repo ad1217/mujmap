@@ -105,7 +105,7 @@ pub struct Account {
 #[derive(Debug, Deserialize)]
 pub struct AccountCapabilities {
     #[serde(rename = "urn:ietf:params:jmap:core")]
-    pub core: EmptyCapabilities,
+    pub core: Option<EmptyCapabilities>,
     #[serde(rename = "urn:ietf:params:jmap:mail")]
     pub mail: MailAccountCapabilities,
 }
