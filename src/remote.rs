@@ -932,36 +932,60 @@ impl Remote {
                 };
 
                 // Keywords.
-                patch.insert(
-                    "keywords/$draft",
-                    as_value(local_email.tags.contains("draft")),
-                );
-                patch.insert(
-                    "keywords/$seen",
-                    as_value(!local_email.tags.contains("unread")),
-                );
-                patch.insert(
-                    "keywords/$flagged",
-                    as_value(local_email.tags.contains("flagged")),
-                );
-                patch.insert(
-                    "keywords/$answered",
-                    as_value(local_email.tags.contains("replied")),
-                );
-                patch.insert(
-                    "keywords/$forwarded",
-                    as_value(local_email.tags.contains("passed")),
-                );
+                if local_email.tags.contains("draft")
+                    != remote_email.keywords.contains(&EmailKeyword::Draft)
+                {
+                    patch.insert(
+                        "keywords/$draft",
+                        as_value(local_email.tags.contains("draft")),
+                    );
+                }
+                if !local_email.tags.contains("unread")
+                    != remote_email.keywords.contains(&EmailKeyword::Seen)
+                {
+                    patch.insert(
+                        "keywords/$seen",
+                        as_value(!local_email.tags.contains("unread")),
+                    );
+                }
+                if local_email.tags.contains("flagged")
+                    != remote_email.keywords.contains(&EmailKeyword::Flagged)
+                {
+                    patch.insert(
+                        "keywords/$flagged",
+                        as_value(local_email.tags.contains("flagged")),
+                    );
+                }
+                if local_email.tags.contains("replied")
+                    != remote_email.keywords.contains(&EmailKeyword::Answered)
+                {
+                    patch.insert(
+                        "keywords/$answered",
+                        as_value(local_email.tags.contains("replied")),
+                    );
+                }
+                if local_email.tags.contains("passed")
+                    != remote_email.keywords.contains(&EmailKeyword::Forwarded)
+                {
+                    patch.insert(
+                        "keywords/$forwarded",
+                        as_value(local_email.tags.contains("passed")),
+                    );
+                }
                 if mailboxes.roles.spam.is_none() && !tags_config.spam.is_empty() {
                     let spam = local_email.tags.contains(&tags_config.spam);
-                    patch.insert("keywords/$junk", as_value(spam));
-                    patch.insert("keywords/$notjunk", as_value(!spam));
+                    if spam != remote_email.keywords.contains(&EmailKeyword::Junk)
+                        && !spam != remote_email.keywords.contains(&EmailKeyword::NotJunk)
+                    {
+                        patch.insert("keywords/$junk", as_value(spam));
+                        patch.insert("keywords/$notjunk", as_value(!spam));
+                    }
                 }
                 if !tags_config.phishing.is_empty() {
-                    patch.insert(
-                        "keywords/$phishing",
-                        as_value(local_email.tags.contains(&tags_config.phishing)),
-                    );
+                    let phishing = local_email.tags.contains(&tags_config.phishing);
+                    if phishing != remote_email.keywords.contains(&EmailKeyword::Phishing) {
+                        patch.insert("keywords/$phishing", as_value(phishing));
+                    }
                 }
                 // Set mailboxes.
                 // TODO: eliminate clone here?
@@ -984,8 +1008,20 @@ impl Remote {
                 if new_mailboxes.is_empty() {
                     new_mailboxes.insert(mailboxes.archive_id.0.clone(), Value::Bool(true));
                 }
-                patch.insert("mailboxIds", Value::Object(new_mailboxes));
-                Some(Ok((id, patch)))
+                if !(new_mailboxes.len() == remote_email.mailbox_ids.len()
+                    && remote_email
+                        .mailbox_ids
+                        .iter()
+                        .all(|k| new_mailboxes.contains_key(&k.0)))
+                {
+                    patch.insert("mailboxIds", Value::Object(new_mailboxes));
+                }
+
+                if patch.is_empty() {
+                    None
+                } else {
+                    Some(Ok((id, patch)))
+                }
             })
             .collect::<Result<HashMap<&Id, HashMap<&str, Value>>>>()?;
         debug!("Built patch for remote: {:?}", updates);
