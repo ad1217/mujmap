@@ -73,8 +73,8 @@ impl Cache {
             .as_ref()
             .to_string_lossy()
             .as_ref()
-            .replace("!", "!!")
-            .replace("/", "!");
+            .replace('!', "!!")
+            .replace('/', "!");
         cached_file_prefix.push('!');
 
         Ok(Self {
