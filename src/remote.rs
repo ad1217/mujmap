@@ -279,28 +279,28 @@ impl Remote {
                     )
                 }
 
-                let authorization = match r.header("WWW-Authenticate") {
-                    Some(v) if v.starts_with("Basic") => {
+                let authorization = match r.all("WWW-Authenticate") {
+                    v if v.iter().any(|v| v.starts_with("Basic")) => {
                         debug!("server offered Basic auth");
                         Some(encode_basic(username, password))
                     }
 
-                    Some(v) if v.starts_with("Bearer") => {
+                    v if v.iter().any(|v| v.starts_with("Bearer")) => {
                         debug!("server offered Bearer auth");
                         Some(format!("Bearer {}", password))
                     }
 
                     // Server didn't offer any auth schemes but still requires authentication.
                     // Probably it will accept Basic; try that.
-                    None => {
+                    v if v.is_empty() => {
                         debug!("server requires auth but didn't offer a scheme, assuming Basic");
                         Some(encode_basic(username, password))
                     }
 
                     // No authorization, which will make the next call fail, and then we'll just
                     // return an error.
-                    Some(v) => {
-                        debug!("server offered unsupported auth scheme: {}", v);
+                    v => {
+                        debug!("server offered unsupported auth scheme(s): {:?}", v);
                         None
                     }
                 };
