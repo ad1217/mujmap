@@ -255,74 +255,32 @@ impl Remote {
             .timeout(Duration::from_secs(timeout))
             .build();
 
-        match agent.get(session_url).call() {
-            Ok(r) => {
-                // Server returned success without authentication. Surprising, but valid.
-                let session_url = r.get_url().to_string();
-                let session: jmap::Session = r.into_json().context(ResponseSnafu {})?;
-                Ok(Self {
-                    http_wrapper: HttpWrapper::new(None, timeout),
-                    session_url,
-                    session,
-                })
-            }
-
-            Err(ureq::Error::Status(code, ref r)) if code == 401 => {
-                fn encode_basic(username: &str, password: &str) -> String {
-                    let safe_username = match username.find(':') {
-                        Some(idx) => &username[..idx],
-                        None => username,
-                    };
-                    format!(
-                        "Basic {}",
-                        base64::encode(format!("{}:{}", safe_username, password))
-                    )
-                }
-
-                let authorization = match r.all("WWW-Authenticate") {
-                    v if v.iter().any(|v| v.starts_with("Basic")) => {
-                        debug!("server offered Basic auth");
-                        Some(encode_basic(username, password))
-                    }
-
-                    v if v.iter().any(|v| v.starts_with("Bearer")) => {
-                        debug!("server offered Bearer auth");
-                        Some(format!("Bearer {}", password))
-                    }
-
-                    // Server didn't offer any auth schemes but still requires authentication.
-                    // Probably it will accept Basic; try that.
-                    v if v.is_empty() => {
-                        debug!("server requires auth but didn't offer a scheme, assuming Basic");
-                        Some(encode_basic(username, password))
-                    }
-
-                    // No authorization, which will make the next call fail, and then we'll just
-                    // return an error.
-                    v => {
-                        debug!("server offered unsupported auth scheme(s): {:?}", v);
-                        None
-                    }
-                };
-
-                let url = r.get_url();
-
-                let mut req = agent.get(url);
-                if let Some(a) = &authorization {
-                    req = req.set("Authorization", a);
-                }
-
-                let r = req.call().context(OpenSessionSnafu { session_url })?;
-                let session: jmap::Session = r.into_json().context(ResponseSnafu {})?;
-                Ok(Self {
-                    http_wrapper: HttpWrapper::new(authorization, timeout),
-                    session_url: url.to_string(),
-                    session,
-                })
-            }
-
-            Err(e) => Err(e).context(OpenSessionSnafu { session_url }),
+        fn encode_basic(username: &str, password: &str) -> String {
+            let safe_username = match username.find(':') {
+                Some(idx) => &username[..idx],
+                None => username,
+            };
+            format!(
+                "Basic {}",
+                base64::encode(format!("{}:{}", safe_username, password))
+            )
         }
+
+        let authorization = Some(encode_basic(username, password));
+
+        let mut req = agent.get(session_url);
+        if let Some(a) = &authorization {
+            req = req.set("Authorization", a);
+        }
+
+        let r = req.call().context(OpenSessionSnafu { session_url })?;
+        let response_session_url = r.get_url().to_string();
+        let session: jmap::Session = r.into_json().context(ResponseSnafu {})?;
+        Ok(Self {
+            http_wrapper: HttpWrapper::new(authorization, timeout),
+            session_url: response_session_url,
+            session,
+        })
     }
 
     /// Return a list of all `Email` IDs that exist on the server and a state `String` returned by
