@@ -40,7 +40,7 @@ pub struct Session {
 #[derive(Debug, Deserialize)]
 pub struct PrimaryAccounts {
     #[serde(rename = "urn:ietf:params:jmap:core")]
-    pub core: Id,
+    pub core: Option<Id>,
     #[serde(rename = "urn:ietf:params:jmap:mail")]
     pub mail: Id,
 }
